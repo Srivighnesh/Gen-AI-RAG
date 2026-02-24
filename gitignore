@@ -1,0 +1,27 @@
+# API Keys — NEVER commit this
+.env
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# FAISS index (auto-generated, no need to commit)
+vector_store/
+
+# Temp upload folder
+tmp_uploads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
