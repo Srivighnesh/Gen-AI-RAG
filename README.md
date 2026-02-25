@@ -93,3 +93,7 @@ streamlit run app.py
 - **Vector Store:** FAISS (persistent local storage)
 - **Document Loader:** PyPDFLoader
 - **Framework:** LangChain
+
+## Contributors 
+
+- **Chilaka Raghava THanks for laptop.
