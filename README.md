@@ -96,4 +96,4 @@ streamlit run app.py
 
 ## Contributors 
 
-- **Chilaka Raghava THanks for laptop.
+- Chilaka Raghava Thanks for laptop.
