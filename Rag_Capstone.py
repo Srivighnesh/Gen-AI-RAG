@@ -131,8 +131,11 @@ hr { border-color:#1a1d2e !important; }
 
 
 # ─────────────────────────────────────────
-# Helpers — environment & models
+# Helpers Methods — environment & models
 # ─────────────────────────────────────────
+# -----------------------------------------
+# os.getenv("KEY", "default_value") - if the variable is not found, it uses the default value.
+# -----------------------------------------
 def load_env():
     load_dotenv(".env")
     return {
@@ -172,8 +175,15 @@ def make_llm(env, provider, temperature=0.2):
 
 
 # ─────────────────────────────────────────
-# Helpers — document processing
+# Helpers — document processing- Chucking add into VectorDB
 # ─────────────────────────────────────────
+# -----------------------------------------
+# Creates a text splitter (RecursiveCharacterTextSplitter) with two parameters:
+# chunk_size=500: target size of each chunk (in characters).
+# chunk_overlap=50: number of characters to overlap between consecutive chunks.
+# Splits the input documents (docs) into smaller chunks using the splitter’s .split_documents(docs) method.
+# Used RAG + LangChain To break larger Docs into smaller and manageable pieces for embeddings and retrival.
+# -----------------------------------------
 def chunk_documents(docs, chunk_size=500, chunk_overlap=50):
     return RecursiveCharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
@@ -181,10 +191,17 @@ def chunk_documents(docs, chunk_size=500, chunk_overlap=50):
 
 
 def build_index_from_pdfs(uploaded_files, embeddings):
+    # Prepares a list to hold all the Document objects (one per page).
+    # Ensures a temporary directory exists for writing uploaded bytes to files.
     all_docs = []
     tmp_dir = Path("tmp_uploads")
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
+    # uploaded_files likely contains file-like objects (e.g., from a web form).
+    # The code writes the raw bytes into a temporary file on disk so file-based loaders (like PyPDFLoader) can parse the
+    # PyPDFLoader(...).load() extracts text pages and returns a list of Document objects (one per page), each with page_content and metadata (e.g., page index, source).
+    # Extends all_docs with these pages across all PDF.
+    # Deletes the temporary file after reading (good hygiene). missing_ok=True avoids exceptions if the file was already remove
     for up in uploaded_files:
         tmp_path = tmp_dir / up.name
         with open(tmp_path, "wb") as f:
@@ -195,6 +212,10 @@ def build_index_from_pdfs(uploaded_files, embeddings):
     if not all_docs:
         raise ValueError("No pages could be loaded from the uploaded PDFs.")
 
+    # Builds a FAISS index (an efficient vector similarity search library)
+    # so later you can retrieve the most similar chunks given a query vector
+    # Ensures output directory exists
+    # Persists FAISS index to disk so you can reload it later without recomping embeddings.
     chunks = chunk_documents(all_docs)
     db = FAISS.from_documents(chunks, embeddings)
     Path(INDEX_DIR).mkdir(parents=True, exist_ok=True)
@@ -203,9 +224,14 @@ def build_index_from_pdfs(uploaded_files, embeddings):
 
 
 def load_persistent_index(embeddings):
-    if not Path(INDEX_DIR).exists():
+    if not Path(INDEX_DIR).exists(): # INDEX_DIR - Vector_Store folder/Directory
         return None
     try:
+         # Loads your previously persisted FAISS vector store from disk.
+        # embeddings must match the one used during save (same provider/model/dimensions).
+        # FAISS stores only vectors and metadata, Not embedding function itself.
+        # allow_dangerous_deserialization used in new langchain version to untrusted pickle files can
+        # be a security risk. Only load indexes you trust.
         return FAISS.load_local(
             INDEX_DIR, embeddings, allow_dangerous_deserialization=True
         )
@@ -213,7 +239,7 @@ def load_persistent_index(embeddings):
         st.warning(f"⚠️ Saved index could not be loaded (provider mismatch?): {e}")
         return None
 
-
+# Feature is not Working
 def reset_embeddings_from_disk():
     """Delete saved FAISS index folder. Returns True if something was deleted."""
     if Path(INDEX_DIR).exists():
@@ -225,10 +251,22 @@ def reset_embeddings_from_disk():
 # ─────────────────────────────────────────
 # Helpers — RAG chain
 # ─────────────────────────────────────────
-def format_docs(docs):
-    return "\n\n".join(d.page_content for d in docs)
+def format_docs(docs):pages = []
+    # Simpler version
+    # return "\n\n".join(doc.page_content for doc in docs)
+
+    for doc in docs:
+        pages.append(doc.page_content)
+    return "\n\n".join(pages)
 
 
+# Input mapping (dict of lambdas)
+# It expects an input dict like:
+# {"docs": [Document, ...], "question": "..."}
+# It transforms that input into the exact variables needed by the prompt:
+# "context" → produced by format_docs(x["docs"]) (joins retrieved doc chunks into a single text block separated by blank lines).
+# "question" → passed through as‑is.
+# Template has {context} and {questions} - LCEL fills these using the outputs of the mapping step.
 def build_chain(llm):
     prompt = ChatPromptTemplate.from_template("""You are a helpful document assistant.
 
@@ -249,7 +287,7 @@ Answer:""")
 
     return (
         {
-            "context":  lambda x: format_docs(x["docs"]),
+            "context":  lambda x: format_docs(x["docs"]), # The | operator is the LCEL “pipe” operator that composes runnable: output of left → input of right.
             "question": lambda x: x["question"],
         }
         | prompt
@@ -257,6 +295,7 @@ Answer:""")
     )
 
 
+# Converst JSON Formate into user friendly Text
 def extract_answer_text(raw) -> str:
     """
     Robustly pull a plain string from whatever LangChain returns.
@@ -299,7 +338,7 @@ def extract_answer_text(raw) -> str:
 
 
 # ─────────────────────────────────────────
-# Sidebar
+# Sidebar - UI 
 # ─────────────────────────────────────────
 env = load_env()
 
@@ -337,7 +376,7 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────
-# API key guard
+# API key      
 # ─────────────────────────────────────────
 if provider == "Gemini" and not env["GOOGLE_API_KEY"]:
     st.error("❌ GOOGLE_API_KEY not found in your .env file.")
@@ -349,7 +388,7 @@ if provider == "OpenAI" and not env["OPENAI_API_KEY"]:
 
 
 # ─────────────────────────────────────────
-# Initialise models
+# Initialise models -- 
 # ─────────────────────────────────────────
 embeddings = make_embeddings(env, provider)
 llm        = make_llm(env, provider, temperature=temperature)
@@ -363,6 +402,9 @@ for key, default in [("db", None), ("answer", None), ("sources", [])]:
     if key not in st.session_state:
         st.session_state[key] = default
 
+# ─────────────────────────────────────────
+# Conversation memory (LangChain Buffer Memory) -- Need to added this feature 
+# ─────────────────────────────────────────
 
 # ─────────────────────────────────────────
 # Load / build index
@@ -495,4 +537,5 @@ with tab_ask:
   {doc.page_content}
   <div class="source-meta">File: {name} &nbsp;|&nbsp; Page: {page}</div>
 </div>
+
 """, unsafe_allow_html=True)
