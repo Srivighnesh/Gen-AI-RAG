@@ -39,14 +39,17 @@ MAX_HISTORY_TURNS = 5           # Limit conversation history to last 5 turns for
 # API KEYS
 # ==========================================================
 
-def load_api_keys():
+def load_api_keys() -> dict:
+    """Read API keys and model names from the .env file."""
     load_dotenv(".env")
     return {
-        "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
-        "GOOGLE_CHAT_MODEL_NAME": os.getenv("GOOGLE_CHAT_MODEL_NAME", "gemini-1.5-flash"),
+        # Gemini
+        "GOOGLE_API_KEY":          os.getenv("GOOGLE_API_KEY"),
+        "GOOGLE_CHAT_MODEL_NAME":  os.getenv("GOOGLE_CHAT_MODEL_NAME",  "gemini-1.5-flash"),
         "GOOGLE_EMBED_MODEL_NAME": os.getenv("GOOGLE_EMBED_MODEL_NAME", "gemini-embedding-001"),
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-        "OPENAI_CHAT_MODEL_NAME": os.getenv("OPENAI_CHAT_MODEL_NAME", "gpt-4o-mini"),
+        # OpenAI
+        "OPENAI_API_KEY":          os.getenv("OPENAI_API_KEY"),
+        "OPENAI_CHAT_MODEL_NAME":  os.getenv("OPENAI_CHAT_MODEL_NAME",  "gpt-4o-mini"),
         "OPENAI_EMBED_MODEL_NAME": os.getenv("OPENAI_EMBED_MODEL_NAME", "text-embedding-3-small"),
     }
 
@@ -102,49 +105,39 @@ def build_vector_index(uploaded_files, embeddings):
         tmp_path = tmp_dir / file.name
         tmp_path.write_bytes(file.read())
         
-        File_name = file.name.lower()
+        file_name = file.name.lower()
 
-        # Choose loader based on file type
-        if File_name.endswith(".pdf"):
+        if file_name.endswith(".pdf"):
             loader = PyPDFLoader(str(tmp_path))
-
-        elif File_name.endswith(".csv"):
-            loader = CSVLoader(
-                file_path=str(tmp_path),
-                encoding="utf-8",
-            )
-        elif File_name.endswith(".txt"):
-            loader = TextLoader(
-                str(tmp_path),
-                encoding="utf-8"
-            )
+        elif file_name.endswith(".csv"):
+            loader = CSVLoader(file_path=str(tmp_path), encoding="utf-8")
+        elif file_name.endswith(".txt"):
+            loader = TextLoader(str(tmp_path), encoding="utf-8")
         else:
             st.warning(f"Unsupported file type: {file.name}")
-            tmp_path.unlink(missing_ok=True)  # Clean up unsupported file
+            tmp_path.unlink(missing_ok=True)
             continue
-        
+
         docs = loader.load()
         all_pages.extend(docs)
-        tmp_path.unlink(missing_ok=True)  # Clean up after loading
+        tmp_path.unlink(missing_ok=True)
 
-        # chect after processing all files, if there are any valid documents
-        if not all_pages:
-            raise ValueError("No valid documents found in uploaded files.")
+   
+    if not all_pages:
+        raise ValueError("No valid documents found in uploaded files.")
 
-        # Chuck documents into smaller pieces and create vector index
-        chunks = split_into_chunks(all_pages)
+    chunks = split_into_chunks(all_pages)
 
-        try:
-            # Create Vector Database from chunks and embeddings in vector_store/ folder
-            vector_db = FAISS.from_documents(chunks, embeddings)
-        except Exception as e:
-            st.warning(f"Failed to load existing index: {e}")
-    
-        Path(INDEX_FOLDER).mkdir(exist_ok=True)
-        vector_db.save_local(INDEX_FOLDER)
+    try:
+        vector_db = FAISS.from_documents(chunks, embeddings)
+    except Exception as e:
+        st.error(f"Failed to build FAISS index: {e}")
+        return None, 0  
+
+    Path(INDEX_FOLDER).mkdir(exist_ok=True)
+    vector_db.save_local(INDEX_FOLDER)
 
     return vector_db, len(chunks)
-
 
 def delete_saved_index():
     if Path(INDEX_FOLDER).exists():
@@ -302,7 +295,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 st.divider()
-api_keys = load_api_keys()
+
 
 # ---------------------------------------------------------
 # Sidebar - File Upload and Indexing
@@ -327,6 +320,18 @@ with st.sidebar:
         reset_btn = st.button("Reset Index")
     st.divider ()
 
+api_keys = load_api_keys()
+
+# *************************************************************
+# GuardRail: Ensure API keys are present
+# *************************************************************
+if provider == "Gemini" and not api_keys["GOOGLE_API_KEY"]:
+    st.error("Missing GOOGLE_API_KEY in .env")
+    st.stop()
+
+if provider == "OpenAI" and not api_keys["OPENAI_API_KEY"]:
+    st.error("Missing OPENAI_API_KEY in .env")
+    st.stop()
 # Initialize models
 FIXED_TEMPERATURE = 0.2
 embeddings = create_embeddings(api_keys, provider)
@@ -442,13 +447,3 @@ else:
 
                 st.divider()
 
-# *************************************************************
-# GuardRail: Ensure API keys are present
-# *************************************************************
-if provider == "Gemini" and not api_keys["GOOGLE_API_KEY"]:
-    st.error("Missing GOOGLE_API_KEY in .env")
-    st.stop()
-
-if provider == "OpenAI" and not api_keys["OPENAI_API_KEY"]:
-    st.error("Missing OPENAI_API_KEY in .env")
-    st.stop()
