@@ -1,6 +1,6 @@
 # 🧠 AI Research Assistant — RAG (Retrieval-Augmented Generation)
 
-A Streamlit app that lets you upload PDF documents, index them with FAISS, and ask questions using Gemini or OpenAI — with source citations.
+A Streamlit app that lets you upload  documents, index them with FAISS, and ask questions using Gemini or OpenAI — with source citations.
 
 ---
 
