@@ -92,7 +92,7 @@ streamlit run AppRAG.py
 |---|---|---|
 | `GOOGLE_API_KEY` | Gemini API key from Google AI Studio | *(required for Gemini)* |
 | `OPENAI_API_KEY` | OpenAI API key | *(required for OpenAI)* |
-| `GOOGLE_CHAT_MODEL_NAME` | Gemini chat model | `gemini-1.5-flash` |
+| `GOOGLE_CHAT_MODEL_NAME` | Gemini chat model | `gemini-2.5-flash` |
 | `GOOGLE_EMBED_MODEL_NAME` | Gemini embedding model | `gemini-embedding-001` |
 | `OPENAI_CHAT_MODEL_NAME` | OpenAI chat model | `gpt-4o-mini` |
 | `OPENAI_EMBED_MODEL_NAME` | OpenAI embedding model | `text-embedding-3-small` |
