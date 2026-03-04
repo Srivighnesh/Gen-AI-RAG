@@ -67,7 +67,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 ### 6. Run the app
 
 ```bash
-streamlit run appRAG.py
+streamlit run AppRAG.py
 ```
 
 ---
